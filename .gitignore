@@ -1,0 +1,7 @@
+.idea
+*.iml
+client_secrets.json
+Procfile
+*.mp4
+*.session
+*.exe
