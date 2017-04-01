@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/alecthomas/kingpin"
-	. "github.com/mikeyoon/goyoutube-upload/lib"
+	. "github.com/mikeyoon/youtube-up/lib"
 	"github.com/vektra/errors"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/youtube/v3"
