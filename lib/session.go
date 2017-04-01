@@ -102,7 +102,6 @@ func (session *UploadSession) Upload(filename string, offset int64) (*youtube.Vi
 		if (offset > 0) {
 			firstByte := offset + 1
 			req.ContentLength = session.Size - firstByte
-			log.Printf("bytes %d-%d/%d", firstByte, session.Size - 1, session.Size)
 			req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", firstByte, session.Size - 1, session.Size))
 		} else {
 			req.ContentLength = session.Size

@@ -7,8 +7,10 @@ import (
 	"github.com/vektra/errors"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/youtube/v3"
+	"gopkg.in/cheggaaa/pb.v1"
 	"log"
 	"os"
+	"time"
 )
 
 const UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status,contentDetails"
@@ -18,9 +20,10 @@ var (
 	description = kingpin.Flag("description", "Description of the video").String()
 	playlist    = kingpin.Flag("playlist", "Playlist to add the video to").String()
 	tags        = kingpin.Flag("tags", "Tags for the video").Strings()
-	check       = kingpin.Flag("check", "Check progress of the [filename]").Bool()
 	privacy     = kingpin.Flag("privacy", "Privacy settings [public, unlisted, private]").Default("public").String()
 
+	// utility flags
+	check        = kingpin.Flag("check", "Check progress of the [filename]").Bool()
 	findPlaylist = kingpin.Flag("find-playlist", "Find a playlist by title").String()
 
 	filename = kingpin.Arg("filename", "Video file to upload").String()
@@ -78,6 +81,13 @@ func main() {
 	size := stat.Size()
 
 	if err == nil {
+		finished := make(chan bool)
+		ticker := time.NewTicker(time.Second * 10)
+		tickChan := ticker.C
+
+		bar := pb.New64(size)
+		bar.Units = pb.U_BYTES
+
 		var video *youtube.Video = nil
 		// Check if session already exists
 		if session, err = OpenSession(*filename); err == nil {
@@ -86,7 +96,12 @@ func main() {
 
 			if err == nil {
 				log.Printf("Resuming Upload at %d of %d bytes\n", offset, session.Size)
-				video, err = session.Upload(*filename, offset)
+				bar.Set64(offset)
+				bar.Start()
+				go func() {
+					video, err = session.Upload(*filename, offset)
+					finished <- true
+				}()
 			}
 		} else {
 			// Open a new session
@@ -97,7 +112,36 @@ func main() {
 			session.Save(*filename)
 
 			log.Println("Starting new upload")
-			video, err = session.Upload(*filename, 0)
+			bar.Start()
+			go func() {
+				video, err = session.Upload(*filename, 0)
+				finished <- true
+			}()
+		}
+
+		for {
+			select {
+			case <-finished:
+				ticker.Stop()
+				bar.Set64(size)
+				bar.Finish()
+				tickChan = nil
+				finished = nil
+				break
+			case <-tickChan:
+				offset, err := session.CheckSessionProgress()
+				if err == nil {
+					if offset >= 0 {
+						bar.Set64(offset + 1)
+					} else {
+						bar.Set64(size)
+					}
+				}
+			}
+
+			if tickChan == nil && finished == nil {
+				break
+			}
 		}
 
 		if video != nil && *playlist != "" {
@@ -113,11 +157,7 @@ func main() {
 	if err == nil {
 		log.Println("Upload Successful")
 		os.Remove(*filename + ".session")
-		// Start/Resume upload
-		// If failed due to connection issue, retry every 60 seconds
-	}
-
-	if err != nil {
+	} else {
 		log.Fatalf("Error uploading video: %v", err)
 	}
 }
