@@ -79,7 +79,7 @@ func GetClient(ctx context.Context) *http.Client {
 		fmt.Println(err)
 	}
 
-	config, err := google.ConfigFromJSON(cred, "https://www.googleapis.com/auth/youtube.upload")
+	config, err := google.ConfigFromJSON(cred, "https://www.googleapis.com/auth/youtube")
 	if err != nil {
 		fmt.Println(err)
 	}

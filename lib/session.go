@@ -13,6 +13,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"google.golang.org/api/youtube/v3"
 )
 
 type UploadSession struct {
@@ -80,20 +81,20 @@ func (session *UploadSession) CheckSessionProgress() (int64, error) {
 	return 0, err
 }
 
-func (session *UploadSession) Upload(filename string, offset int64) (error) {
+func (session *UploadSession) Upload(filename string, offset int64) (*youtube.Video, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if (offset > 0) {
 		if _, err := file.Seek(offset + 1, 0); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if req, err := http.NewRequest("PUT", session.Url, file); err == nil {
@@ -110,7 +111,7 @@ func (session *UploadSession) Upload(filename string, offset int64) (error) {
 		resp, err := session.Client.Do(req)
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if (resp.StatusCode != 201 && resp.StatusCode != 200) {
@@ -118,10 +119,14 @@ func (session *UploadSession) Upload(filename string, offset int64) (error) {
 			if err == nil {
 				err = errors.New(fmt.Sprintf("Bad return code after upload: %d, %s", resp.StatusCode, string(body)))
 			}
+		} else {
+			video := &youtube.Video{}
+			err := json.NewDecoder(resp.Body).Decode(video)
+			return video, err
 		}
 	}
 
-	return err
+	return nil, err
 }
 
 func (session *UploadSession) Save(filename string) {
