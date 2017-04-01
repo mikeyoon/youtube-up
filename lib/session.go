@@ -22,24 +22,6 @@ type UploadSession struct {
 	Size   int64       `json:"size"`
 }
 
-type Metadata struct {
-	Snippet Snippet `json:"snippet,omitempty"`
-	Status  Status  `json:"status,omitempty"`
-}
-
-type Snippet struct {
-	Title       string   `json:"title"`
-	Description string   `json:"description,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	CategoryId  int      `json:"categoryId,omitempty"`
-}
-
-type Status struct {
-	PrivacyStatus string `json:",omitempty"`
-	Embeddable    bool   `json:"embeddable,omitempty"`
-	License       string `json:"license,omitempty"`
-}
-
 func parseRange(rangeHeader string) (int64, error) {
 	if rangeHeader == "" {
 		return 0, nil
@@ -152,7 +134,7 @@ func OpenSession(filename string) (*UploadSession, error) {
 	return t, err
 }
 
-func CreateUploadSession(meta Metadata, size int64, url string) (*UploadSession, error) {
+func CreateUploadSession(meta *youtube.Video, size int64, url string) (*UploadSession, error) {
 	client := GetClient(oauth2.NoContext)
 
 	options, err := json.Marshal(meta)

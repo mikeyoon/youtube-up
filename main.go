@@ -16,26 +16,31 @@ import (
 const UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status,contentDetails"
 
 var (
-	title       = kingpin.Flag("title", "Title of the video").String()
-	description = kingpin.Flag("description", "Description of the video").String()
-	playlist    = kingpin.Flag("playlist", "Playlist to add the video to").String()
-	tags        = kingpin.Flag("tags", "Tags for the video").Strings()
-	privacy     = kingpin.Flag("privacy", "Privacy settings [public, unlisted, private]").Default("public").String()
+	upload      = kingpin.Command("upload", "Upload a video")
+	filename    = upload.Arg("filename", "Path of the video to upload").Required().String()
+	title       = upload.Flag("title", "Title of the video").String()
+	description = upload.Flag("description", "Description of the video").String()
+	playlist    = upload.Flag("playlist", "Playlist to add the video to").String()
+	tags        = upload.Flag("tags", "Comma-separated list of tags for the video").Strings()
+	privacy     = upload.Flag("privacy", "Privacy settings [public, unlisted, private]").Default("public").String()
+	interval    = upload.Flag("interval", "Timer interval for checking progress, in seconds. "+
+		"Requires an API call each time and Youtube does not update that frequently. Recommended "+
+		"that this not be set lower than 10.").Default("30").Int()
 
-	// utility flags
-	check        = kingpin.Flag("check", "Check progress of the [filename]").Bool()
-	findPlaylist = kingpin.Flag("find-playlist", "Find a playlist by title").String()
+	check         = kingpin.Command("check", "Check progress of the [filename]")
+	checkFilename = check.Arg("filename", "Path of the video to check").Required().String()
 
-	filename = kingpin.Arg("filename", "Video file to upload").String()
+	find              = kingpin.Command("find", "Find items in Youtube. Currently only supports playlists")
+	findPlaylist      = find.Command("playlist", "Find a playlist")
+	findPlaylistTitle = findPlaylist.Flag("title", "Title of the playlist to find").String()
 )
 
 func main() {
 	var session *UploadSession = nil
-	kingpin.Parse()
-
-	if *findPlaylist != "" {
+	switch kingpin.Parse() {
+	case "find playlist":
 		client := GetClient(oauth2.NoContext)
-		playlist, err := GetPlaylistByTitle(client, *findPlaylist)
+		playlist, err := GetPlaylistByTitle(client, *findPlaylistTitle)
 		if err == nil {
 			fmt.Printf("Found '%s', id: %s", playlist.Snippet.Title, playlist.Id)
 		} else {
@@ -43,10 +48,8 @@ func main() {
 		}
 
 		return
-	}
-
-	if *check {
-		if session, err := OpenSession(*filename); err == nil {
+	case "check":
+		if session, err := OpenSession(*checkFilename); err == nil {
 			if err != nil {
 				log.Fatalf("Error opening session: %v", err)
 			}
@@ -71,18 +74,19 @@ func main() {
 		log.Fatal("Filename is required")
 	}
 
-	meta := Metadata{Snippet: Snippet{}, Status: Status{}}
-	meta.Snippet.Title = *title
-	meta.Snippet.Description = *description
-	meta.Snippet.Tags = *tags
-	meta.Status.PrivacyStatus = *privacy
+	meta := &youtube.Video{
+		Snippet: &youtube.VideoSnippet{
+			Description: *description,
+		},
+		Status: &youtube.VideoStatus{PrivacyStatus: *privacy},
+	}
 
 	stat, err := os.Stat(*filename)
 	size := stat.Size()
 
 	if err == nil {
 		finished := make(chan bool)
-		ticker := time.NewTicker(time.Second * 10)
+		ticker := time.NewTicker(time.Second * time.Duration(*interval))
 		tickChan := ticker.C
 
 		bar := pb.New64(size)
