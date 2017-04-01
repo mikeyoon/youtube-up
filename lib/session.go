@@ -14,8 +14,6 @@ import (
 	"regexp"
 	"strconv"
 	"google.golang.org/api/youtube/v3"
-	"net"
-	"time"
 )
 
 type UploadSession struct {
@@ -91,30 +89,21 @@ func (session *UploadSession) Upload(filename string, offset int64) (*youtube.Vi
 			req.ContentLength = session.Size
 		}
 
-		for {
-			resp, err := session.Client.Do(req)
+		resp, err := session.Client.Do(req)
 
-			if err != nil {
-				if err, ok := err.(net.Error); ok && err.Timeout() {
-					time.Sleep(time.Second * 60)
-					continue
-				}
+		if err != nil {
+			return nil, err
+		}
 
-				return nil, err
+		if (resp.StatusCode != 201 && resp.StatusCode != 200) {
+			body, err := ioutil.ReadAll(resp.Body)
+			if err == nil {
+				err = errors.New(fmt.Sprintf("Bad return code after upload: %d, %s", resp.StatusCode, string(body)))
 			}
-
-			if (resp.StatusCode != 201 && resp.StatusCode != 200) {
-				body, err := ioutil.ReadAll(resp.Body)
-				if err == nil {
-					err = errors.New(fmt.Sprintf("Bad return code after upload: %d, %s", resp.StatusCode, string(body)))
-				}
-			} else {
-				video := &youtube.Video{}
-				err := json.NewDecoder(resp.Body).Decode(video)
-				return video, err
-			}
-
-			break;
+		} else {
+			video := &youtube.Video{}
+			err := json.NewDecoder(resp.Body).Decode(video)
+			return video, err
 		}
 	}
 
