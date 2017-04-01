@@ -15,9 +15,9 @@ var (
 	playlist    = kingpin.Flag("playlist", "Playlist to add the video to").String()
 	tags        = kingpin.Flag("tags", "Tags for the video").Strings()
 	check       = kingpin.Flag("check", "Check progress of the filename").Bool()
+	privacy     = kingpin.Flag("privacy", "Privacy settings [public, unlisted, private]").Default("public").String()
 
 	filename = kingpin.Arg("filename", "Video file to upload").Required().String()
-	privacy  = kingpin.Arg("privacy", "Privacy settings [public, unlisted, private]").Default("public").String()
 )
 
 func main() {
@@ -25,7 +25,7 @@ func main() {
 
 	kingpin.Parse()
 
-	if (*check) {
+	if *check {
 		if session, err := OpenSession(*filename); err == nil {
 			if err != nil {
 				log.Fatalf("Error opening session: %v", err)
@@ -65,6 +65,9 @@ func main() {
 			} else {
 				// Open a new session
 				session, err = CreateUploadSession(meta, size, UPLOAD_URL)
+				if (err != nil) {
+					log.Fatalf("Error creating session: %v", err)
+				}
 				session.Save(*filename)
 
 				log.Println("Starting new upload")
