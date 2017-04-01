@@ -76,7 +76,9 @@ func main() {
 
 	meta := &youtube.Video{
 		Snippet: &youtube.VideoSnippet{
+			Title:       *title,
 			Description: *description,
+			Tags:        *tags,
 		},
 		Status: &youtube.VideoStatus{PrivacyStatus: *privacy},
 	}
