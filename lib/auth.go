@@ -4,45 +4,47 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vektra/errors"
 	"golang.org/x/oauth2"
-	"log"
+	"golang.org/x/oauth2/google"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
-	"golang.org/x/oauth2/google"
-	"io/ioutil"
 )
 
 // getTokenFromWeb uses Config to request a Token.
 // It returns the retrieved Token.
-func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
+func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 	fmt.Printf("Go to the following link in your browser then type the "+
 		"authorization code: \n%v\n", authURL)
 
 	var code string
 	if _, err := fmt.Scan(&code); err != nil {
-		log.Fatalf("Unable to read authorization code %v", err)
+		err = errors.Format("Unable to read authorization code %v", err)
 	}
 
 	tok, err := config.Exchange(oauth2.NoContext, code)
 	if err != nil {
-		log.Fatalf("Unable to retrieve token from web %v", err)
+		err = errors.Format("Unable to retrieve token from web %v", err)
 	}
-	return tok
+	return tok, err
 }
 
 // saveToken uses a file path to create a file and store the
 // token in it.
-func saveToken(file string, token *oauth2.Token) {
+func saveToken(file string, token *oauth2.Token) error {
 	f, err := os.Create(file)
 	if err != nil {
-		log.Fatalf("Unable to cache oauth token: %v", err)
+		return errors.Format("Unable to cache oauth token: %v", err)
 	}
 	defer f.Close()
 	json.NewEncoder(f).Encode(token)
+
+	return nil
 }
 
 // tokenCacheFile generates credential file path/filename.
@@ -55,7 +57,7 @@ func tokenCacheFile() (string, error) {
 	tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
 	os.MkdirAll(tokenCacheDir, 0700)
 	return filepath.Join(tokenCacheDir,
-		url.QueryEscape("goyoutube-upload.json")), err
+		url.QueryEscape("youtube-up.json")), err
 }
 
 // tokenFromFile retrieves a Token from a given file path.
@@ -76,22 +78,33 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
 func GetClient(ctx context.Context) *http.Client {
 	cred, err := ioutil.ReadFile("./client_secrets.json")
 	if err != nil {
-		fmt.Println(err)
+		panic(errors.Format("Unable to open client_secrets.json.\n"+
+			"If you need to create one, see https://github.com/jay0lee/GAM/wiki/CreatingClientSecretsFile\n"+
+			"Error: %v", err))
 	}
 
 	config, err := google.ConfigFromJSON(cred, "https://www.googleapis.com/auth/youtube")
 	if err != nil {
-		fmt.Println(err)
+		panic(errors.New("Failed to parse oauth2 config from client_secrets.json."))
 	}
 
 	cacheFile, err := tokenCacheFile()
 	if err != nil {
-		log.Fatalf("Unable to get path to cached credential file. %v", err)
+		panic(errors.New("Unable to make the path for the credential cache."))
 	}
+
 	tok, err := tokenFromFile(cacheFile)
 	if err != nil {
-		tok = getTokenFromWeb(config)
-		saveToken(cacheFile, tok)
+		tok, err = getTokenFromWeb(config)
+
+		if err == nil {
+			err = saveToken(cacheFile, tok)
+		}
+
+		if err != nil {
+			panic(err)
+		}
 	}
+
 	return config.Client(ctx, tok)
 }

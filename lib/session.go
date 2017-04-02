@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/vektra/errors"
 	"golang.org/x/oauth2"
+	"google.golang.org/api/youtube/v3"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,13 +14,12 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"google.golang.org/api/youtube/v3"
 )
 
 type UploadSession struct {
-	Url    string      `json:"url"`
+	Url    string       `json:"url"`
 	Client *http.Client `json:"-"`
-	Size   int64       `json:"size"`
+	Size   int64        `json:"size"`
 }
 
 func parseRange(rangeHeader string) (int64, error) {
@@ -69,8 +69,8 @@ func (session *UploadSession) Upload(filename string, offset int64) (*youtube.Vi
 		return nil, err
 	}
 
-	if (offset > 0) {
-		if _, err := file.Seek(offset + 1, 0); err != nil {
+	if offset > 0 {
+		if _, err := file.Seek(offset+1, 0); err != nil {
 			return nil, err
 		}
 	}
@@ -81,10 +81,10 @@ func (session *UploadSession) Upload(filename string, offset int64) (*youtube.Vi
 
 	if req, err := http.NewRequest("PUT", session.Url, file); err == nil {
 		req.Header.Add("Content-Type", "video/*")
-		if (offset > 0) {
+		if offset > 0 {
 			firstByte := offset + 1
 			req.ContentLength = session.Size - firstByte
-			req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", firstByte, session.Size - 1, session.Size))
+			req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", firstByte, session.Size-1, session.Size))
 		} else {
 			req.ContentLength = session.Size
 		}
@@ -95,7 +95,7 @@ func (session *UploadSession) Upload(filename string, offset int64) (*youtube.Vi
 			return nil, err
 		}
 
-		if (resp.StatusCode != 201 && resp.StatusCode != 200) {
+		if resp.StatusCode != 201 && resp.StatusCode != 200 {
 			body, err := ioutil.ReadAll(resp.Body)
 			if err == nil {
 				err = errors.New(fmt.Sprintf("Bad return code after upload: %d, %s", resp.StatusCode, string(body)))

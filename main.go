@@ -36,10 +36,18 @@ var (
 )
 
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r)
+			os.Exit(1)
+		}
+	}()
+
 	var session *UploadSession = nil
 	switch kingpin.Parse() {
 	case "find playlist":
 		client := GetClient(oauth2.NoContext)
+
 		playlist, err := GetPlaylistByTitle(client, *findPlaylistTitle)
 		if err == nil {
 			fmt.Printf("Found '%s', id: %s", playlist.Snippet.Title, playlist.Id)
@@ -129,10 +137,13 @@ func main() {
 			select {
 			case <-finished:
 				ticker.Stop()
-				bar.Set64(size)
-				bar.Finish()
+				if err == nil {
+					bar.Set64(size)
+					finished = nil
+					bar.Finish()
+				}
+
 				tickChan = nil
-				finished = nil
 				break
 			case <-tickChan:
 				offset, err := session.CheckSessionProgress()
