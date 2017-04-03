@@ -98,7 +98,7 @@ func (session *UploadSession) Upload(filename string, offset int64) (*youtube.Vi
 		if resp.StatusCode != 201 && resp.StatusCode != 200 {
 			body, err := ioutil.ReadAll(resp.Body)
 			if err == nil {
-				err = errors.New(fmt.Sprintf("Bad return code after upload: %d, %s", resp.StatusCode, string(body)))
+				err = errors.Format("Bad return code after upload: %d, %s", resp.StatusCode, string(body))
 			}
 		} else {
 			video := &youtube.Video{}

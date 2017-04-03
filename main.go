@@ -9,11 +9,15 @@ import (
 	"google.golang.org/api/youtube/v3"
 	"gopkg.in/cheggaaa/pb.v1"
 	"log"
+	"net"
+	"net/url"
 	"os"
+	"syscall"
 	"time"
 )
 
 const UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status,contentDetails"
+const RETRY_INTERVAL = 60
 
 var (
 	upload      = kingpin.Command("upload", "Upload a video")
@@ -96,6 +100,7 @@ func main() {
 
 	if err == nil {
 		finished := make(chan bool)
+		failed := make(chan error)
 		ticker := time.NewTicker(time.Second * time.Duration(*interval))
 		tickChan := ticker.C
 
@@ -103,8 +108,13 @@ func main() {
 		bar.Units = pb.U_BYTES
 
 		var video *youtube.Video = nil
-		// Check if session already exists
-		if session, err = OpenSession(*filename); err == nil {
+
+		var resume = func(retry bool) {
+			if retry {
+				log.Printf("Connection timed out. Resuming in %d seconds\n", RETRY_INTERVAL)
+				time.Sleep(time.Second * RETRY_INTERVAL)
+			}
+
 			// Reopen session and continue upload if so
 			offset, err := session.CheckSessionProgress()
 
@@ -112,11 +122,21 @@ func main() {
 				log.Printf("Resuming Upload at %d of %d bytes\n", offset, session.Size)
 				bar.Set64(offset)
 				bar.Start()
-				go func() {
-					video, err = session.Upload(*filename, offset)
+
+				video, err = session.Upload(*filename, offset)
+				if err != nil {
+					failed <- err
+				} else {
 					finished <- true
-				}()
+				}
+			} else {
+				failed <- err
 			}
+		}
+
+		// Check if session already exists
+		if session, err = OpenSession(*filename); err == nil {
+			go resume(false)
 		} else {
 			// Open a new session
 			session, err = CreateUploadSession(meta, size, UPLOAD_URL)
@@ -129,7 +149,11 @@ func main() {
 			bar.Start()
 			go func() {
 				video, err = session.Upload(*filename, 0)
-				finished <- true
+				if err != nil {
+					failed <- err
+				} else {
+					finished <- true
+				}
 			}()
 		}
 
@@ -137,14 +161,30 @@ func main() {
 			select {
 			case <-finished:
 				ticker.Stop()
-				if err == nil {
-					bar.Set64(size)
-					finished = nil
-					bar.Finish()
-				}
+				bar.Set64(size)
+				bar.Finish()
 
 				tickChan = nil
-				break
+				finished = nil
+				failed = nil
+			case err := <-failed:
+				switch t := err.(type) {
+				default:
+					log.Fatalf("Unknown error during upload: %v\n", err)
+				case *net.OpError:
+					if t.Op == "Put" {
+						go resume(true)
+					}
+				case *url.Error:
+					if t.Op == "Put" || t.Err == syscall.ECONNRESET {
+						go resume(true)
+					}
+				case syscall.Errno:
+					switch t {
+					case syscall.ECONNRESET:
+						go resume(true)
+					}
+				}
 			case <-tickChan:
 				offset, err := session.CheckSessionProgress()
 				if err == nil {
@@ -156,7 +196,7 @@ func main() {
 				}
 			}
 
-			if tickChan == nil && finished == nil {
+			if tickChan == nil && finished == nil && failed == nil {
 				break
 			}
 		}
