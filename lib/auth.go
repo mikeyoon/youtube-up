@@ -13,14 +13,18 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"github.com/skratchdot/open-golang/open"
 )
 
 // getTokenFromWeb uses Config to request a Token.
 // It returns the retrieved Token.
 func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	fmt.Printf("Go to the following link in your browser then type the "+
-		"authorization code: \n%v\n", authURL)
+
+	open.Run(authURL)
+
+	fmt.Printf("Opening browser to get auth token. If it doesn't happen automatically, go to the " +
+		"following link in your browser then type the authorization code: \n%v\n", authURL)
 
 	var code string
 	if _, err := fmt.Scan(&code); err != nil {

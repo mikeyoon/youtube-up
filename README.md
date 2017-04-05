@@ -96,4 +96,4 @@ Flags:
 Currently just allows finding the ID of a playlist by title. In the future
 this might support other searching options if I find them useful.
 
-Example: `youtube-up find playlist "My Playlist"`
+Example: `youtube-up find playlist --title "My Playlist"`
