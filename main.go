@@ -96,119 +96,121 @@ func main() {
 	}
 
 	stat, err := os.Stat(*filename)
+	if (err != nil) {
+		panic(errors.Format("%s not found", *filename))
+	}
+
 	size := stat.Size()
 
-	if err == nil {
-		finished := make(chan bool)
-		failed := make(chan error)
-		ticker := time.NewTicker(time.Second * time.Duration(*interval))
-		tickChan := ticker.C
+	finished := make(chan bool)
+	failed := make(chan error)
+	ticker := time.NewTicker(time.Second * time.Duration(*interval))
+	tickChan := ticker.C
 
-		bar := pb.New64(size)
-		bar.Units = pb.U_BYTES
+	bar := pb.New64(size)
+	bar.Units = pb.U_BYTES
 
-		var video *youtube.Video = nil
+	var video *youtube.Video = nil
 
-		var resume = func(retry bool) {
-			if retry {
-				log.Printf("Connection timed out. Resuming in %d seconds\n", RETRY_INTERVAL)
-				time.Sleep(time.Second * RETRY_INTERVAL)
-			}
-
-			// Reopen session and continue upload if so
-			offset, err := session.CheckSessionProgress()
-
-			if err == nil {
-				log.Printf("Resuming Upload at %d of %d bytes\n", offset, session.Size)
-				bar.Set64(offset)
-				bar.Start()
-
-				video, err = session.Upload(*filename, offset)
-				if err != nil {
-					failed <- err
-				} else {
-					finished <- true
-				}
-			} else {
-				failed <- err
-			}
+	var resume = func(retry bool) {
+		if retry {
+			log.Printf("Connection timed out. Resuming in %d seconds\n", RETRY_INTERVAL)
+			time.Sleep(time.Second * RETRY_INTERVAL)
 		}
 
-		// Check if session already exists
-		if session, err = OpenSession(*filename); err == nil {
-			go resume(false)
-		} else {
-			// Open a new session
-			session, err = CreateUploadSession(meta, size, UPLOAD_URL)
-			if err != nil {
-				log.Fatalf("Error creating session: %v", err)
-			}
-			session.Save(*filename)
-
-			log.Println("Starting new upload")
+		// Reopen session and continue upload if so
+		offset, err := session.CheckSessionProgress()
+		
+		if err == nil {
+			log.Printf("Resuming Upload at %d of %d bytes\n", offset, session.Size)
+			bar.Set64(offset)
 			bar.Start()
-			go func() {
-				video, err = session.Upload(*filename, 0)
-				if err != nil {
-					failed <- err
-				} else {
-					finished <- true
-				}
-			}()
-		}
 
-		for {
-			select {
-			case <-finished:
-				ticker.Stop()
-				bar.Set64(size)
-				bar.Finish()
-
-				tickChan = nil
-				finished = nil
-				failed = nil
-			case err := <-failed:
-				switch t := err.(type) {
-				default:
-					log.Fatalf("Unknown error during upload: %v\n", err)
-				case *net.OpError:
-					if t.Op == "Put" {
-						go resume(true)
-					}
-				case *url.Error:
-					if t.Op == "Put" || t.Err == syscall.ECONNRESET {
-						go resume(true)
-					}
-				case syscall.Errno:
-					switch t {
-					case syscall.ECONNRESET:
-						go resume(true)
-					}
-				}
-			case <-tickChan:
-				offset, err := session.CheckSessionProgress()
-				if err == nil {
-					if offset >= 0 {
-						bar.Set64(offset + 1)
-					} else {
-						bar.Set64(size)
-					}
-				}
-			}
-
-			if tickChan == nil && finished == nil && failed == nil {
-				break
-			}
-		}
-
-		if video != nil && *playlist != "" {
-			pl, err := GetPlaylistByTitle(session.Client, *playlist)
+			video, err = session.Upload(*filename, offset)
 			if err != nil {
-				err = errors.Format("Error adding video to playlist. %v", err)
+				failed <- err
+			} else {
+				finished <- true
 			}
-
-			pl.AddToPlaylist(session.Client, pl.Id, video.Id)
+		} else {
+			failed <- err
 		}
+	}
+
+	// Check if session already exists
+	if session, err = OpenSession(*filename); err == nil {
+		go resume(false)
+	} else {
+		// Open a new session
+		session, err = CreateUploadSession(meta, size, UPLOAD_URL)
+		if err != nil {
+			log.Fatalf("Error creating session: %v", err)
+		}
+		session.Save(*filename)
+
+		log.Println("Starting new upload")
+		bar.Start()
+		go func() {
+			video, err = session.Upload(*filename, 0)
+			if err != nil {
+				failed <- err
+			} else {
+				finished <- true
+			}
+		}()
+	}
+
+	for {
+		select {
+		case <-finished:
+			ticker.Stop()
+			bar.Set64(size)
+			bar.Finish()
+
+			tickChan = nil
+			finished = nil
+			failed = nil
+		case err := <-failed:
+			switch t := err.(type) {
+			default:
+				log.Fatalf("Unknown error during upload: %v\n", err)
+			case *net.OpError:
+				if t.Op == "Put" {
+					go resume(true)
+				}
+			case *url.Error:
+				if t.Op == "Put" || t.Err == syscall.ECONNRESET {
+					go resume(true)
+				}
+			case syscall.Errno:
+				switch t {
+				case syscall.ECONNRESET:
+					go resume(true)
+				}
+			}
+		case <-tickChan:
+			offset, err := session.CheckSessionProgress()
+			if err == nil {
+				if offset >= 0 {
+					bar.Set64(offset + 1)
+				} else {
+					bar.Set64(size)
+				}
+			}
+		}
+
+		if tickChan == nil && finished == nil && failed == nil {
+			break
+		}
+	}
+
+	if video != nil && *playlist != "" {
+		pl, err := GetPlaylistByTitle(session.Client, *playlist)
+		if err != nil {
+			err = errors.Format("Error adding video to playlist. %v", err)
+		}
+
+		pl.AddToPlaylist(session.Client, pl.Id, video.Id)
 	}
 
 	if err == nil {
