@@ -7,16 +7,18 @@ install:
   - go get
 
 before_deploy:
-  - GOOS=windows GOARCH=amd64 go build -o youtube-up.exe && tar -czf youtube-up-win-amd64.tar.gz youtube-up.exe
+  - GOOS=windows GOARCH=amd64 go build -o youtube-up.exe && zip youtube-up-win-amd64.zip youtube-up.exe
   - GOOS=darwin GOARCH=amd64 go build -o youtube-up && tar -czf youtube-up-darwin-amd64.tar.gz youtube-up
   - GOOS=linux GOARCH=amd64 go build -o youtube-up && tar -czf youtube-up-linux-amd64.tar.gz youtube-up
 
 deploy:
   provider: releases
-  api_key: "${GITHUB_OAUTH_TOKEN}"
+  api_key:
+    secure: c+I68Sq7eL6yiCuxtmQZWq4A9rHTXwtQkQYj8+sHWh4D+QVR3adWhzVlScA2j7bDrLhxwYEKHd4weACnx5DMs+8121iQf3lTe8qqi+ZIdIB6pwViWrADBPXazqAXPEPC169YI0QUWVebGuLn4LM/i1IVIRa2kFn4vK9bcrnSClzfbrWyU+RG/qrZAFCPa6FldQYm6jicB0zSaMaarOdey6h304WHkSTK6Mi0sly7qfZvU56kGRgX25+BqAN5zxJ2wLAiRT1etxiPumbyKAqeZWFk6aWWSfdy+LNFEr2/KPPhsyT3W6rqmmdcaKrFmPlVWtHP7RfV/AjtBQWZ9gerTk+1cjKr0D5xbFt7W76QPBF3GrMmbP6u5J3VajGv7sHx3v3yXrlZICmRmLhh35AAoad5v3VXqUfPDGxjfUUABICAL9Ud02ZAA2Vrjc6K3+bp8TgMTmcusYqtr76CtdeanH0cMCXjgb574ltLRJLZXxv9PakgSaVCl6jDga26ml8Hc25kZHcB8xqkShGu3XL7zgA3P5PoUReIUPTWZH1vjfSMyQGmidIV4ymeJEEI1FYr+9Wv6F2kdBoRjnN9GfaG3XkK/9qdVg2BqhYy64zfrEbUj9uVzLy7ILFASEdOfNKwT3a8K6RrfNDoMp5XBDdrx/u7sOZ0l+1QS7TYZIWsDzs=
   on:
     tags: true
   file:
     - "youtube-up-linux-amd64.tar.gz"
     - "youtube-up-win-amd64.zip"
     - "youtube-up-darwin-amd64.tar.gz"
+
