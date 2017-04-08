@@ -120,7 +120,7 @@ func main() {
 
 		// Reopen session and continue upload if so
 		offset, err := session.CheckSessionProgress()
-		
+
 		if err == nil {
 			log.Printf("Resuming Upload at %d of %d bytes\n", offset, session.Size)
 			bar.Set64(offset)

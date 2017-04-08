@@ -1,0 +1,22 @@
+language: go
+
+go:
+  - 1.8.x
+
+install:
+  - go get
+
+before_deploy:
+  - GOOS=windows GOARCH=amd64 go build youtube-up.exe && tar -czf youtube-up-win-amd64.tar.gz youtube-up.exe
+  - GOOS=darwin GOARCH=amd64 go build youtube-up && tar -czf youtube-up-darwin-amd64.tar.gz youtube-up
+  - GOOS=linux GOARCH=amd64 go build youtube-up && tar -czf youtube-up-linux-amd64.tar.gz youtube-up
+
+deploy:
+  provider: releases
+  api-key: "${GITHUB_OAUTH_TOKEN}"
+  on:
+    tags: true
+  file:
+    - "youtube-up-linux-amd64.tar.gz"
+    - "youtube-up-win-amd64.zip"
+    - "youtube-up-darwin-amd64.tar.gz"
